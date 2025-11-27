@@ -29,11 +29,20 @@ A production-ready, fully automated LLM-powered quiz-solver service built with F
 
 ## 🚀 Quick Start
 
+### Deployment Options
+
+#### ☁️ Option 1: Deploy to Vercel (Serverless)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kartikay2005/llm-quiz-solver)
+
+**⚠️ Note:** Vercel deployment has limitations (no Playwright/JavaScript execution). See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for details.
+
+#### 💻 Option 2: Local Development (Full Features)
+
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/tds-quiz-solver.git
-cd tds-quiz-solver
+git clone https://github.com/kartikay2005/llm-quiz-solver.git
+cd llm-quiz-solver
 ```
 
 ### 2. Create Virtual Environment

@@ -1,0 +1,52 @@
+# .vercelignore - Files to exclude from Vercel deployment
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+app/tests/
+test_key/
+
+# Development
+.downloads/
+downloads/
+*.log
+.env
+.env.local
+.env.example
+quiz_demo.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (large files)
+CAPABILITY_ANALYSIS.md
+COMPREHENSIVE_ANALYSIS_REPORT.md
+test_key/
+
+# Local requirements (use requirements-vercel.txt)
+requirements.txt
