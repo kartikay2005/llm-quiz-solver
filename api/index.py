@@ -72,21 +72,61 @@ class handler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"detail": f"Failed to fetch URL: {str(e)}"}).encode())
                     return
                 
-                # Simple question extraction
+                # Enhanced question extraction
                 import re
+                from html.parser import HTMLParser
+                
+                class TextExtractor(HTMLParser):
+                    def __init__(self):
+                        super().__init__()
+                        self.text = []
+                        self.skip_tags = {'script', 'style', 'head', 'meta', 'link'}
+                        self.current_tag = None
+                    def handle_starttag(self, tag, attrs):
+                        self.current_tag = tag
+                    def handle_data(self, data):
+                        if self.current_tag not in self.skip_tags:
+                            self.text.append(data.strip())
+                    def get_text(self):
+                        return ' '.join(filter(None, self.text))
+                
                 question = ""
-                match = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.IGNORECASE | re.DOTALL)
-                if match:
-                    question = re.sub(r"<[^>]+>", "", match.group(1)).strip()
                 
-                if not question:
-                    match = re.search(r"<p[^>]*>(.*?)</p>", html, re.IGNORECASE | re.DOTALL)
+                # Try to find question in common selectors
+                patterns = [
+                    r'class=["\'][^"\']*question[^"\']*["\'][^>]*>(.*?)</div>',
+                    r'id=["\']question["\'][^>]*>(.*?)</div>',
+                    r'<h1[^>]*>(.*?)</h1>',
+                    r'<h2[^>]*>(.*?)</h2>',
+                    r'<p[^>]*class=["\'][^"\']*question[^"\']*["\'][^>]*>(.*?)</p>',
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
                     if match:
-                        question = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+                        text = re.sub(r'<[^>]+>', ' ', match.group(1))
+                        text = re.sub(r'\s+', ' ', text).strip()
+                        if len(text) > 10:
+                            question = text
+                            break
                 
+                # Look for embedded JSON with question data
                 if not question:
-                    question = re.sub(r"<[^>]+>", " ", html)
-                    question = re.sub(r"\s+", " ", question).strip()[:500]
+                    json_match = re.search(r'["\']question["\']\s*:\s*["\']([^"\']+)["\']', html)
+                    if json_match:
+                        question = json_match.group(1)
+                
+                # Extract all visible text as fallback
+                if not question or len(question) < 20:
+                    extractor = TextExtractor()
+                    try:
+                        extractor.feed(html)
+                        full_text = extractor.get_text()
+                        if full_text:
+                            question = full_text[:1000]
+                    except:
+                        question = re.sub(r'<[^>]+>', ' ', html)
+                        question = re.sub(r'\s+', ' ', question).strip()[:1000]
                 
                 # Call LLM
                 answer = "Unable to determine answer"
@@ -98,10 +138,11 @@ class handler(BaseHTTPRequestHandler):
                         llm_data = json.dumps({
                             "model": "openai/gpt-4o-mini",
                             "messages": [
-                                {"role": "system", "content": "You are a quiz solver. Answer concisely."},
-                                {"role": "user", "content": f"Question: {question[:500]}\n\nProvide only the answer."}
+                                {"role": "system", "content": "You are an expert quiz solver for IIT Madras TDS (Tools in Data Science) course. Analyze the question carefully and provide ONLY the final answer. For multiple choice, give only the letter or text of the correct option. For numerical answers, give only the number. For code output questions, give only the output value. Be precise and concise."},
+                                {"role": "user", "content": f"Question/Content:\n{question[:1500]}\n\nProvide ONLY the answer, nothing else."}
                             ],
-                            "max_tokens": 100
+                            "max_tokens": 200,
+                            "temperature": 0.1
                         }).encode()
                         
                         llm_req = urllib.request.Request(
