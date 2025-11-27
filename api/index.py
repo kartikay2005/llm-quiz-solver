@@ -2,13 +2,27 @@
 import sys
 import os
 
-# Add the parent directory to the path so we can import the app
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Set VERCEL environment variable before importing
+# Set environment before any imports
 os.environ['VERCEL'] = '1'
 
-from app.server.main import app
+# Add project root to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Vercel expects this specific export
-app = app
+# Import FastAPI app
+try:
+    from app.server.main import app
+except Exception as e:
+    # Fallback minimal app for debugging
+    from fastapi import FastAPI
+    app = FastAPI()
+    
+    @app.get("/")
+    def root():
+        return {"error": str(e), "message": "Failed to import main app"}
+    
+    @app.get("/healthz")
+    def health():
+        return {"status": "error", "detail": str(e)}
+
+# Export for Vercel
+handler = app

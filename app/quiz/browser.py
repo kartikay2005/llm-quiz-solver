@@ -11,7 +11,7 @@ from app.utils.logger import get_logger
 logger = get_logger("browser")
 
 # Check if running in serverless environment
-IS_SERVERLESS = os.getenv("VERCEL", "").lower() == "1" or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+IS_SERVERLESS = os.getenv("VERCEL") == "1" or bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def fetch_page_and_downloads(url: str, download_dir: str | None = None, timeout: int = 30) -> Dict[str, Any]:

@@ -1,10 +1,14 @@
 """Configuration management with environment variables."""
 import os
 from dataclasses import dataclass
-from dotenv import load_dotenv
 
-
-load_dotenv()
+# Only load .env file if not in serverless environment
+if not os.getenv("VERCEL"):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # dotenv not available in serverless
 
 
 @dataclass
