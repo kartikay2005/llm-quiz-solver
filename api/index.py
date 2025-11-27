@@ -1,34 +1,119 @@
-"""Vercel serverless function entry point."""
-import sys
+"""Vercel serverless function entry point for FastAPI."""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import os
+import sys
 
-# Set environment before any imports
-os.environ['VERCEL'] = '1'
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Set serverless flag
+os.environ["VERCEL"] = "1"
 
-# Import FastAPI app
-try:
-    from app.server.main import app
+# Create FastAPI app
+app = FastAPI(title="LLM Quiz Solver - Vercel")
+
+# Add CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class SolveRequest(BaseModel):
+    email: str
+    secret: str
+    url: str
+
+
+@app.get("/")
+def root():
+    return {"message": "LLM Quiz Solver API", "status": "running", "version": "1.0"}
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.post("/solving")
+async def solving(request: SolveRequest):
+    """Solve a quiz from the given URL."""
+    import httpx
     
-    # Vercel handler - this is the entry point
-    def handler(request):
-        """ASGI handler for Vercel."""
-        return app(request)
+    # Validate secret
+    expected_secret = os.getenv("QUIZ_SECRET", "")
+    if not expected_secret or request.secret != expected_secret:
+        raise HTTPException(status_code=403, detail="Invalid secret")
     
-except Exception as e:
-    # Fallback minimal app for debugging
-    from fastapi import FastAPI
-    app = FastAPI()
+    # Validate email
+    if not request.email or not request.email.strip():
+        raise HTTPException(status_code=422, detail="Email cannot be empty")
     
-    @app.get("/")
-    def root():
-        return {"error": str(e), "message": "Failed to import main app"}
-    
-    @app.get("/healthz")
-    def health():
-        return {"status": "error", "detail": str(e)}
-    
-    def handler(request):
-        return app(request)
+    try:
+        # Fetch the page
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(request.url, follow_redirects=True)
+            html = response.text
+        
+        # Parse HTML for question
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Extract question text
+        question = None
+        for selector in [".question", "#question", "h1", "h2", "p"]:
+            el = soup.select_one(selector)
+            if el and el.get_text(strip=True):
+                text = el.get_text(separator=" ", strip=True)
+                if len(text) > 10:
+                    question = text
+                    break
+        
+        if not question:
+            question = soup.get_text(separator=" ", strip=True)[:500]
+        
+        # Try to call LLM
+        answer = None
+        aipipe_key = os.getenv("QUIZ_SECRET", "")  # Use JWT as API key
+        
+        if aipipe_key:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    llm_response = await client.post(
+                        "https://aipipe.org/openrouter/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {aipipe_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "openai/gpt-4o-mini",
+                            "messages": [
+                                {"role": "system", "content": "You are a quiz solver. Answer concisely with just the answer value."},
+                                {"role": "user", "content": f"Question: {question}\n\nProvide only the answer value, nothing else."}
+                            ],
+                            "max_tokens": 100
+                        }
+                    )
+                    if llm_response.status_code == 200:
+                        data = llm_response.json()
+                        answer = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            except Exception as e:
+                answer = f"LLM Error: {str(e)}"
+        
+        if not answer:
+            answer = "Unable to determine answer"
+        
+        return {
+            "status": "success",
+            "question": question[:200] if question else "No question found",
+            "answer": answer,
+            "url": request.url
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
