@@ -1,37 +1,77 @@
-"""Browser automation utilities using Playwright sync API.
+"""Serverless-compatible browser utilities.
 
-This module provides functions to load pages, capture HTML, and download linked files.
+For Vercel deployment, Playwright cannot run in serverless functions.
+This module provides fallback using httpx for basic HTML fetching.
 """
+import os
 from typing import Dict, Any
 from pathlib import Path
-from app.utils.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger("browser")
 
-
-def _ensure_download_dir(base: str) -> Path:
-    """Ensure download directory exists."""
-    p = Path(base)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+# Check if running in serverless environment
+IS_SERVERLESS = os.getenv("VERCEL", "").lower() == "1" or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
 
 
 def fetch_page_and_downloads(url: str, download_dir: str | None = None, timeout: int = 30) -> Dict[str, Any]:
-    """Visit `url` with Playwright, return page HTML, final URL, and list of downloaded file paths.
-
-    Downloads are saved to `download_dir`.
+    """Fetch page content with appropriate method based on environment.
+    
+    In serverless mode (Vercel): Uses httpx for basic HTML fetching
+    In local mode: Uses Playwright for full browser automation
     
     Args:
         url: URL to visit
-        download_dir: Directory to save downloads (defaults to settings.DOWNLOAD_DIR)
-        timeout: Page load timeout in seconds
+        download_dir: Directory to save downloads
+        timeout: Request timeout in seconds
         
     Returns:
-        Dict with keys: html, url, downloads (list of file paths)
+        Dict with keys: html, url, downloads, js_data
     """
+    if IS_SERVERLESS:
+        logger.info("Running in serverless mode - using httpx")
+        return _fetch_with_httpx(url, timeout)
+    else:
+        logger.info("Running in local mode - using Playwright")
+        return _fetch_with_playwright(url, download_dir, timeout)
+
+
+def _fetch_with_httpx(url: str, timeout: int) -> Dict[str, Any]:
+    """Fetch HTML using httpx (serverless-compatible)."""
+    import httpx
+    
+    try:
+        logger.info("Fetching %s with httpx", url)
+        
+        # Handle file:// URLs
+        if url.startswith("file://"):
+            file_path = url.replace("file://", "")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                html = f.read()
+            return {"html": html, "url": url, "downloads": [], "js_data": {}}
+        
+        # Fetch HTTP/HTTPS URLs
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            html = response.text
+            final_url = str(response.url)
+            
+        logger.info("Successfully fetched %d bytes", len(html))
+        return {"html": html, "url": final_url, "downloads": [], "js_data": {}}
+        
+    except Exception as e:
+        logger.exception("HTTP fetch failed: %s", e)
+        raise
+
+
+def _fetch_with_playwright(url: str, download_dir: str | None, timeout: int) -> Dict[str, Any]:
+    """Fetch HTML using Playwright (local mode only)."""
+    from app.utils.config import settings
+    
     download_dir = download_dir or settings.DOWNLOAD_DIR
-    download_path = _ensure_download_dir(download_dir)
+    download_path = Path(download_dir)
+    download_path.mkdir(parents=True, exist_ok=True)
 
     try:
         from playwright.sync_api import sync_playwright
