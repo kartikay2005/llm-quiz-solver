@@ -1,27 +1,11 @@
 """Vercel serverless function entry point for FastAPI."""
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import os
-import sys
-
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Set serverless flag
-os.environ["VERCEL"] = "1"
 
 # Create FastAPI app
-app = FastAPI(title="LLM Quiz Solver - Vercel")
-
-# Add CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="LLM Quiz Solver")
 
 
 class SolveRequest(BaseModel):
@@ -30,16 +14,19 @@ class SolveRequest(BaseModel):
     url: str
 
 
+@app.get("/api/index")
 @app.get("/")
 def root():
     return {"message": "LLM Quiz Solver API", "status": "running", "version": "1.0"}
 
 
+@app.get("/api/index/healthz")
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
 
 
+@app.post("/api/index/solving")
 @app.post("/solving")
 async def solving(request: SolveRequest):
     """Solve a quiz from the given URL."""
@@ -79,7 +66,7 @@ async def solving(request: SolveRequest):
         
         # Try to call LLM
         answer = None
-        aipipe_key = os.getenv("QUIZ_SECRET", "")  # Use JWT as API key
+        aipipe_key = os.getenv("QUIZ_SECRET", "")
         
         if aipipe_key:
             try:
@@ -93,8 +80,8 @@ async def solving(request: SolveRequest):
                         json={
                             "model": "openai/gpt-4o-mini",
                             "messages": [
-                                {"role": "system", "content": "You are a quiz solver. Answer concisely with just the answer value."},
-                                {"role": "user", "content": f"Question: {question}\n\nProvide only the answer value, nothing else."}
+                                {"role": "system", "content": "You are a quiz solver. Answer concisely."},
+                                {"role": "user", "content": f"Question: {question}\n\nProvide only the answer."}
                             ],
                             "max_tokens": 100
                         }
@@ -117,3 +104,7 @@ async def solving(request: SolveRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Vercel requires this handler
+handler = app
