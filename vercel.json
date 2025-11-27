@@ -1,12 +1,7 @@
 {
-  "functions": {
-    "api/*.py": {
-      "runtime": "python3.12"
-    }
-  },
   "rewrites": [
     { "source": "/healthz", "destination": "/api/index" },
     { "source": "/solving", "destination": "/api/index" },
-    { "source": "/(.*)", "destination": "/api/index" }
+    { "source": "/", "destination": "/api/index" }
   ]
 }
