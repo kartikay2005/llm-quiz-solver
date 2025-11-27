@@ -11,6 +11,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Import FastAPI app
 try:
     from app.server.main import app
+    
+    # Vercel handler - this is the entry point
+    def handler(request):
+        """ASGI handler for Vercel."""
+        return app(request)
+    
 except Exception as e:
     # Fallback minimal app for debugging
     from fastapi import FastAPI
@@ -23,6 +29,6 @@ except Exception as e:
     @app.get("/healthz")
     def health():
         return {"status": "error", "detail": str(e)}
-
-# Export for Vercel
-handler = app
+    
+    def handler(request):
+        return app(request)

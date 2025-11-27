@@ -48,5 +48,5 @@ CAPABILITY_ANALYSIS.md
 COMPREHENSIVE_ANALYSIS_REPORT.md
 test_key/
 
-# Local requirements (use requirements-vercel.txt)
-requirements.txt
+# Local requirements file (has heavy dependencies)
+# Vercel will use requirements-vercel.txt instead
