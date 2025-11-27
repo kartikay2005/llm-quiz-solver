@@ -4,7 +4,19 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import json
 from app.utils.logger import get_logger
-import pdfplumber
+
+# Optional imports for non-serverless environments
+try:
+    import pdfplumber
+    HAS_PDF = True
+except ImportError:
+    HAS_PDF = False
+    
+try:
+    import openpyxl
+    HAS_EXCEL = True
+except ImportError:
+    HAS_EXCEL = False
 
 logger = get_logger("extractor")
 
@@ -106,6 +118,9 @@ def parse_csv(path: str) -> pd.DataFrame:
 
 def parse_xlsx(path: str) -> pd.DataFrame:
     """Parse Excel file into DataFrame."""
+    if not HAS_EXCEL:
+        logger.warning("openpyxl not available, cannot parse Excel files")
+        raise ImportError("openpyxl not installed - Excel parsing not available in serverless mode")
     return pd.read_excel(path)
 
 
@@ -118,6 +133,10 @@ def parse_pdf(path: str) -> str:
     Returns:
         Extracted text content
     """
+    if not HAS_PDF:
+        logger.warning("pdfplumber not available, cannot parse PDF files")
+        raise ImportError("pdfplumber not installed - PDF parsing not available in serverless mode")
+    
     text = []
     try:
         with pdfplumber.open(path) as pdf:
